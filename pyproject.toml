@@ -1,12 +1,12 @@
 [project]
 name = "homekit-py"
 version = "0.3.0"
-description = "Local control of Apple HomeKit devices via CLIP API v2: library, CLI, and MCP server"
+description = "Local control of Apple HomeKit devices via HAP: library, CLI, and MCP server"
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Jens Rehpöhler" }]
-keywords = ["homekit", "apple-homekit", "smart-home", "mcp", "clip-api"]
+keywords = ["homekit", "apple-homekit", "smart-home", "mcp", "hap"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -16,13 +16,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "httpx==0.28.1",
     "typer==0.25.1",
     "pydantic==2.13.4",
     "fastmcp==3.2.4",
-    "httpx-sse==0.4.3",
     "zeroconf==0.148.0",
     "platformdirs==4.9.6",
+    "aiohomekit==3.2.20",
+    "keyring==25.7.0",
+    "pydantic-settings==2.14.1",
+    "rich==15.0.0",
 ]
 
 [dependency-groups]
@@ -37,9 +39,12 @@ dev = [
     "ruff==0.15.13",
 ]
 
+[project.optional-dependencies]
+simulator = ["HAP-python>=4.9.0"]
+
 [project.scripts]
-homekit = "homekit.cli:app"
-homekit-mcp = "homekit.mcp_server:main"
+homekit = "homekit.cli.main:app"
+homekit-mcp = "homekit.mcp_server.server:main"
 
 [project.urls]
 Homepage = "https://github.com/jenreh/homekit-py"
@@ -271,8 +276,13 @@ exclude = [
 branch = true
 source = ["homekit"]
 omit = [
-    "homekit/mcp_server.py",
-    "homekit/protocol/sse.py",
+    "homekit/backends/aiohomekit_backend.py",
+    "homekit/core/backend.py",
+    "homekit/cli/main.py",
+    "homekit/mcp_server/server.py",
+    "homekit/diagnostics/mdns.py",
+    "homekit/diagnostics/network.py",
+    "homekit/diagnostics/pairability.py",
 ]
 
 [tool.coverage.report]

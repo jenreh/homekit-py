@@ -36,27 +36,22 @@ tasks:
       - echo "🔒 Installing pre-commit hooks..."
       - uv tool list | grep -q pre-commit || uv tool install pre-commit
       - uv run pre-commit install
-      - uv run alembic upgrade head
 
   sync:
     desc: Install dependencies using uv
     cmd: uv sync
 
   # ----------------------------------------------------------------------------
-  # Reflex Application Commands
+  # CLI and MCP Server
   # ----------------------------------------------------------------------------
 
-  run:
-    desc: Start the reflex web application
-    cmd: "{{.RUNNER}} reflex run"
+  cli:
+    desc: Run the homekit CLI (forward args after --)
+    cmd: "{{.RUNNER}} homekit {{.CLI_ARGS}}"
 
-  run:debug:
-    desc: Start the reflex web application with debug logging
-    cmd: "{{.RUNNER}} reflex run --loglevel=debug"
-
-  run:prod:
-    desc: Start the reflex web application in prod mode
-    cmd: "{{.RUNNER}} reflex run --env prod --single-port"
+  mcp:
+    desc: Run the homekit MCP server over STDIO
+    cmd: "{{.RUNNER}} homekit-mcp"
 
   # ----------------------------------------------------------------------------
   # Quality Assurance (Tests, Lint, Format)
