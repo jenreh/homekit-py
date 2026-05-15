@@ -49,7 +49,7 @@ def category_name(ci: int) -> str:
 
 @dataclass(frozen=True, slots=True)
 class DiscoveredAccessory:
-    """A HomeKit accessory advertised via mDNS — not necessarily paired yet."""
+    """A HomeKit accessory advertised via mDNS or BLE — not necessarily paired yet."""
 
     device_id: str
     name: str
@@ -61,6 +61,7 @@ class DiscoveredAccessory:
     is_paired: bool
     config_number: int
     is_bridge: bool
+    transport: Literal["ip", "ble", "thread"] = "ip"
 
 
 @dataclass(frozen=True, slots=True)

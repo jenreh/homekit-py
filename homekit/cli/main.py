@@ -56,7 +56,9 @@ app.add_typer(raw_app, name="raw")
 
 def _setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(stream=sys.stderr, level=level, format="%(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        stream=sys.stderr, level=level, format="%(levelname)s %(name)s %(message)s"
+    )
 
 
 def _print_json(payload: Any) -> None:
@@ -143,16 +145,27 @@ def cmd_discover(
         _print_json(accessories)
         return
     table = Table(title="HomeKit accessories on the LAN")
-    for column in ("Name", "Device ID", "Model", "Category", "Host:Port", "State"):
+    for column in (
+        "Name",
+        "Device ID",
+        "Model",
+        "Category",
+        "Transport",
+        "Host:Port",
+        "State",
+    ):
         table.add_column(column)
     for accessory in accessories:
         state = "paired" if accessory.is_paired else "pairable"
+        transport = getattr(accessory, "transport", "ip")
+        host_port = f"{accessory.host}:{accessory.port}" if accessory.host else "—"
         table.add_row(
             accessory.name,
             accessory.device_id,
             accessory.model or "—",
             accessory.category_name,
-            f"{accessory.host}:{accessory.port}",
+            transport,
+            host_port,
             state,
         )
     console.print(table)
@@ -348,7 +361,9 @@ def cmd_set(
         if "=" in expression:
             key, raw = expression.split("=", 1)
             return await _dispatch_set(client, entity_id, entity.domain, key, raw)
-        return await _dispatch_set(client, entity_id, entity.domain, "state", expression)
+        return await _dispatch_set(
+            client, entity_id, entity.domain, "state", expression
+        )
 
     result = _run(_with_client(_action))
     _print_json(result)
@@ -535,7 +550,9 @@ def cmd_raw_write(device_id: str, aid: int, iid: int, value: str) -> None:
 
 
 @app.command("accessories")
-def cmd_accessories(device_id: str, as_json: bool = typer.Option(False, "--json")) -> None:
+def cmd_accessories(
+    device_id: str, as_json: bool = typer.Option(False, "--json")
+) -> None:
     async def _action(client: HomeKitClient) -> Any:
         return await client.get_accessories(device_id, refresh=True)
 

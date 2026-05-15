@@ -73,7 +73,10 @@ class HomeKitClient:
             self._config.cache_dir, ttl_seconds=self._config.cache.ttl_seconds
         )
         self._backend: HomeKitBackend = backend or AiohomekitBackend(
-            self._store, self._cache
+            self._store,
+            self._cache,
+            ble_enabled=self._config.discovery.ble_enabled,
+            thread_enabled=self._config.discovery.thread_enabled,
         )
         self._policy = Policy(dict(self._config.dangerous_operations))
         self._state_cache = StateCache()
@@ -116,8 +119,14 @@ class HomeKitClient:
     def state_cache(self) -> StateCache:
         return self._state_cache
 
-    async def discover(self, timeout_s: float | None = None) -> list[DiscoveredAccessory]:
-        timeout = timeout_s if timeout_s is not None else self._config.discovery.mdns_timeout_s
+    async def discover(
+        self, timeout_s: float | None = None
+    ) -> list[DiscoveredAccessory]:
+        timeout = (
+            timeout_s
+            if timeout_s is not None
+            else self._config.discovery.mdns_timeout_s
+        )
         return await self._backend.discover(timeout)
 
     async def pair(
@@ -394,8 +403,7 @@ def _primary_sensor_characteristic(service_type_name: str | None) -> str | None:
 
 
 def _attribute_key(type_name: str) -> str:
-    return "".join(
-        ["_" + c.lower() if c.isupper() and i else c.lower() for i, c in enumerate(type_name)]
-    )
-
-
+    return "".join([
+        "_" + c.lower() if c.isupper() and i else c.lower()
+        for i, c in enumerate(type_name)
+    ])

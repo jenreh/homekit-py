@@ -20,6 +20,7 @@ from aiohomekit.exceptions import (
 )
 from aiohomekit.model.characteristics import CharacteristicsTypes
 from aiohomekit.model.services import ServicesTypes
+from bleak import BleakScanner
 from zeroconf.asyncio import AsyncServiceBrowser, AsyncZeroconf
 
 from homekit.core.cache import AccessoryCache
@@ -47,6 +48,30 @@ if TYPE_CHECKING:
     from aiohomekit.controller.abstract import AbstractDiscovery, AbstractPairing
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Bleak compat shim
+# ---------------------------------------------------------------------------
+# aiohomekit 3.2.x was written against bleak <0.21 which had
+# ``BleakScanner.register_detection_callback()``.  That method was removed in
+# bleak 0.21.  We subclass BleakScanner, wiring the new constructor-based
+# detection_callback API back into the old method so aiohomekit's BleController
+# continues to work without modification.
+
+
+class _CompatBleakScanner(BleakScanner):
+    """BleakScanner with ``register_detection_callback`` shim for aiohomekit."""
+
+    def __init__(self) -> None:
+        self._pending_callback: Any = None
+        super().__init__(detection_callback=self._on_detect)
+
+    def _on_detect(self, device: Any, advertisement_data: Any) -> None:
+        if self._pending_callback is not None:
+            self._pending_callback(device, advertisement_data)
+
+    def register_detection_callback(self, callback: Any) -> None:  # noqa: ANN401
+        self._pending_callback = callback
 
 
 def _build_reverse_map(cls: type) -> dict[str, str]:
@@ -151,30 +176,53 @@ def _convert_accessory(raw: dict[str, Any], device_id: str) -> Accessory:
                     break
             if name:
                 break
-    return Accessory(aid=aid, device_id=device_id, name=name or device_id, services=services)
+    return Accessory(
+        aid=aid, device_id=device_id, name=name or device_id, services=services
+    )
 
 
 class AiohomekitBackend:
     """Implements ``HomeKitBackend`` by delegating to aiohomekit."""
 
-    def __init__(self, store: PairingStore, cache: AccessoryCache) -> None:
+    def __init__(
+        self,
+        store: PairingStore,
+        cache: AccessoryCache,
+        *,
+        ble_enabled: bool = True,
+        thread_enabled: bool = True,
+    ) -> None:
         self._store = store
         self._cache = cache
+        self._ble_enabled = ble_enabled
+        self._thread_enabled = thread_enabled
         self._controller: Controller | None = None
         self._aiozc: AsyncZeroconf | None = None
         self._browser: AsyncServiceBrowser | None = None
+        self._scanner: BleakScanner | None = None
         self._pairings: dict[str, AbstractPairing] = {}
 
     async def start(self) -> None:
         if self._controller is not None:
             return
         self._aiozc = AsyncZeroconf()
+        types = ["_hap._tcp.local."]
+        if self._thread_enabled:
+            types.append("_hap._udp.local.")
         self._browser = AsyncServiceBrowser(
             self._aiozc.zeroconf,
-            ["_hap._tcp.local.", "_hap._udp.local."],
+            types,
             handlers=[_noop_handler],
         )
-        self._controller = Controller(async_zeroconf_instance=self._aiozc)
+        scanner: BleakScanner | None = None
+        if self._ble_enabled:
+            self._scanner = _CompatBleakScanner()
+            scanner = self._scanner
+            logger.info("BLE scanning enabled")
+        self._controller = Controller(
+            async_zeroconf_instance=self._aiozc,
+            bleak_scanner_instance=scanner,
+        )
         await self._controller.async_start()
         self._store.ensure_file()
         try:
@@ -215,6 +263,7 @@ class AiohomekitBackend:
             except Exception as exc:  # noqa: BLE001
                 logger.debug("AsyncZeroconf close raised: %s", exc)
             self._aiozc = None
+        self._scanner = None
 
     # ------------------------------------------------------------------ discovery
 
@@ -248,9 +297,7 @@ class AiohomekitBackend:
         except AuthenticationError as exc:
             raise PairingError(f"Pairing rejected: {exc}") from exc
         except UnknownError as exc:
-            raise NotPairableError(
-                f"Accessory refused pairing: {exc}"
-            ) from exc
+            raise NotPairableError(f"Accessory refused pairing: {exc}") from exc
         device = device_id.upper()
         self._pairings[device] = pairing
         ctrl.save_data(str(self._store.path))
@@ -332,9 +379,7 @@ class AiohomekitBackend:
         try:
             result = await pairing.put_characteristics([(aid, iid, value)])
         except AccessoryDisconnectedError as exc:
-            raise NotPairedError(
-                f"Accessory {device_id} not reachable: {exc}"
-            ) from exc
+            raise NotPairedError(f"Accessory {device_id} not reachable: {exc}") from exc
         failures = (result or {}).get((aid, iid))
         if failures:
             status = int(failures.get("status", -1))
@@ -428,6 +473,13 @@ class AiohomekitBackend:
         if not device_id:
             return None
         category = int(getattr(description, "category", 1) or 1)
+        svc_type: str = getattr(description, "type", "") or ""
+        if "_udp" in svc_type:
+            transport: str = "thread"
+        elif "_tcp" in svc_type:
+            transport = "ip"
+        else:
+            transport = "ble"
         return DiscoveredAccessory(
             device_id=str(device_id).upper(),
             name=str(getattr(description, "name", "") or device_id),
@@ -439,4 +491,5 @@ class AiohomekitBackend:
             is_paired=bool(getattr(discovery, "paired", False)),
             config_number=int(getattr(description, "config_num", 0) or 0),
             is_bridge=category == 2,
+            transport=transport,  # type: ignore[arg-type]
         )

@@ -31,12 +31,15 @@ class ControllerSettings(BaseModel):
 
 class DiscoverySettings(BaseModel):
     mdns_timeout_s: float = 5.0
-    ip_only: bool = True
+    ip_only: bool = False
+    ble_enabled: bool = True
+    thread_enabled: bool = True
 
 
 class ConnectionSettings(BaseModel):
     mode: Literal["ondemand", "persistent"] = "ondemand"
     request_timeout_s: float = 10.0
+    ble_timeout_s: float = 30.0
     event_reconnect_delay_s: float = 2.0
     event_poll_fallback_s: float = 30.0
 
