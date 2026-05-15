@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
-from platformdirs import user_cache_dir, user_config_dir
+from platformdirs import user_cache_dir
 from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
@@ -142,7 +142,7 @@ def _config_dir() -> Path:
     override = os.environ.get("HOMEKIT_CONFIG_DIR")
     if override:
         return Path(override).expanduser()
-    return Path(user_config_dir("homekit"))
+    return Path.home() / ".config" / "homekit-local"
 
 
 def _pairing_dir(config_dir: Path) -> Path:

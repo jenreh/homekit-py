@@ -128,6 +128,55 @@ async def test_get_entity_unknown_raises(client_factory) -> None:
     await client.stop()
 
 
+async def test_alias_resolves_to_canonical_entity(
+    tmp_homekit_config: Path,
+) -> None:
+    (tmp_homekit_config / "entities.toml").write_text(
+        '[entities."light.kitchen_ceiling"]\n'
+        'aliases = ["kueche", "light.kueche"]\n'
+    )
+    config = load_config()
+    backend = FakeBackend()
+    backend.seed_pairing("AA:BB:CC", [_light_accessory("AA:BB:CC")])
+    client = HomeKitClient(config=config, backend=backend)
+    await client.start()
+    try:
+        await client.list_entities()
+        entity_via_alias = await client.get_entity("kueche")
+        entity_via_id = await client.get_entity("light.kitchen_ceiling")
+        assert entity_via_alias.entity_id == "light.kitchen_ceiling"
+        assert entity_via_alias == entity_via_id
+        result = await client.turn_on("light.kueche")
+        assert result.success
+        assert backend._values[("AA:BB:CC", 1, 10)] is True
+    finally:
+        await client.stop()
+
+
+async def test_entity_id_rename_promotes_alias(tmp_homekit_config: Path) -> None:
+    (tmp_homekit_config / "entities.toml").write_text(
+        '[entities."light.kitchen_ceiling"]\n'
+        'entity_id = "light.kueche"\n'
+        'name = "Küche"\n'
+    )
+    config = load_config()
+    backend = FakeBackend()
+    backend.seed_pairing("AA:BB:CC", [_light_accessory("AA:BB:CC")])
+    client = HomeKitClient(config=config, backend=backend)
+    await client.start()
+    try:
+        entities = await client.list_entities()
+        ids = {e.entity_id for e in entities}
+        assert "light.kueche" in ids
+        assert "light.kitchen_ceiling" not in ids
+        # Original id still resolves via alias for backwards-compat.
+        renamed = await client.get_entity("light.kitchen_ceiling")
+        assert renamed.entity_id == "light.kueche"
+        assert renamed.name == "Küche"
+    finally:
+        await client.stop()
+
+
 async def test_unpair_then_pairings_empty(client_factory) -> None:
     client, _ = await client_factory()
     await client.unpair("AA:BB:CC")

@@ -141,10 +141,16 @@ def build_entities(
     *,
     overrides: dict[str, dict[str, object]] | None = None,
 ) -> list[Entity]:
-    """Translate accessories/services into entities with stable entity-ids."""
+    """Translate accessories/services into entities with stable entity-ids.
+
+    Overrides may include ``entity_id`` to rename the canonical id and
+    ``aliases`` to add extra resolvable names. Renames are applied after the
+    default id is allocated so collisions with auto-generated ids are avoided.
+    """
     overrides = overrides or {}
     taken: set[str] = set()
     entities: list[Entity] = []
+    pending_renames: list[tuple[int, str]] = []
     for accessory in accessories:
         accessory_name = _accessory_display_name(accessory)
         for service in accessory.services:
@@ -153,10 +159,10 @@ def build_entities(
                 continue
             capability = _build_capability(service, domain)
             display = accessory_name
-            if service.type_name in {"Outlet", "Switch"}:
-                display = accessory_name
             entity_id = _allocate_entity_id(domain, display, taken)
             override = overrides.get(entity_id, {})
+            aliases = tuple(str(a) for a in override.get("aliases", ()) or ())
+            rename_raw = override.get("entity_id")
             entity = Entity(
                 entity_id=entity_id,
                 domain=domain,
@@ -166,9 +172,40 @@ def build_entities(
                 service_iid=service.iid,
                 capability=capability,
                 room=override.get("room") if isinstance(override.get("room"), str) else None,
-                aliases=tuple(str(a) for a in override.get("aliases", ()) or ()),
+                aliases=aliases,
             )
             entities.append(entity)
+            if isinstance(rename_raw, str) and rename_raw:
+                pending_renames.append((len(entities) - 1, rename_raw))
+    return _apply_renames(entities, pending_renames, taken)
+
+
+def _apply_renames(
+    entities: list[Entity],
+    pending: list[tuple[int, str]],
+    taken: set[str],
+) -> list[Entity]:
+    """Replace canonical ``entity_id`` from override; preserve old id as alias."""
+    for idx, target in pending:
+        current = entities[idx]
+        if target == current.entity_id:
+            continue
+        if target in taken:
+            continue
+        taken.discard(current.entity_id)
+        taken.add(target)
+        previous_alias = (current.entity_id,)
+        entities[idx] = Entity(
+            entity_id=target,
+            domain=current.domain,
+            name=current.name,
+            device_id=current.device_id,
+            aid=current.aid,
+            service_iid=current.service_iid,
+            capability=current.capability,
+            room=current.room,
+            aliases=current.aliases + previous_alias,
+        )
     return entities
 
 

@@ -81,6 +81,7 @@ class HomeKitClient:
         self._policy = Policy(dict(self._config.dangerous_operations))
         self._state_cache = StateCache()
         self._entities: dict[str, Entity] = {}
+        self._alias_index: dict[str, str] = {}
         self._accessory_index: dict[str, list[Accessory]] = {}
         self._started = False
 
@@ -162,31 +163,48 @@ class HomeKitClient:
             all_accessories.extend(accessories)
         entities = build_entities(all_accessories, overrides=overrides)
         self._entities = {e.entity_id: e for e in entities}
+        self._rebuild_alias_index()
         return entities
 
+    def _rebuild_alias_index(self) -> None:
+        index: dict[str, str] = {}
+        for entity in self._entities.values():
+            for alias in entity.aliases:
+                if alias and alias not in self._entities:
+                    index[alias] = entity.entity_id
+        self._alias_index = index
+
+    def _resolve_entity_id(self, entity_id: str) -> str | None:
+        if entity_id in self._entities:
+            return entity_id
+        return self._alias_index.get(entity_id)
+
     async def get_entity(self, entity_id: str) -> Entity:
-        if entity_id not in self._entities:
+        resolved = self._resolve_entity_id(entity_id)
+        if resolved is None:
             await self.list_entities()
-        if entity_id not in self._entities:
+            resolved = self._resolve_entity_id(entity_id)
+        if resolved is None:
             raise AccessoryNotFoundError(f"Unknown entity {entity_id}")
-        return self._entities[entity_id]
+        return self._entities[resolved]
 
     async def get_state(self, entity_id: str, *, refresh: bool = False) -> EntityState:
         entity = await self.get_entity(entity_id)
-        cached = self._state_cache.get(entity_id) if not refresh else None
+        canonical = entity.entity_id
+        cached = self._state_cache.get(canonical) if not refresh else None
         if cached is not None and cached.fresh:
             return cached
         primary_char = self._primary_characteristic(entity)
         if primary_char is None:
             return self._state_cache.update(
-                entity_id, state="unknown", attributes={}, source="poll"
+                canonical, state="unknown", attributes={}, source="poll"
             )
         live = await self._backend.read_characteristic(
             entity.device_id, primary_char.aid, primary_char.iid
         )
         attributes = await self._collect_attributes(entity)
         return self._state_cache.update(
-            entity_id,
+            canonical,
             state=_state_repr(live.value),
             attributes=attributes,
             source="poll",

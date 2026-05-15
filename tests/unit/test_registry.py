@@ -50,6 +50,46 @@ def test_build_entities_collision_suffix() -> None:
     assert ids == ["light.bulb", "light.bulb_2"]
 
 
+def test_build_entities_applies_entity_id_rename() -> None:
+    on = Characteristic(1, 10, "00000025", "On", False, "bool", ("pr", "pw"))
+    overrides = {
+        "cover.eve_shutter_switch_92e7": {
+            "entity_id": "cover.esszimmer",
+            "name": "Esszimmer",
+        }
+    }
+    accessories = [_accessory(1, "Eve Shutter Switch 92E7", "WindowCovering", on)]
+    entities = build_entities(accessories, overrides=overrides)
+    assert entities[0].entity_id == "cover.esszimmer"
+    assert entities[0].name == "Esszimmer"
+    assert "cover.eve_shutter_switch_92e7" in entities[0].aliases
+
+
+def test_build_entities_collects_aliases() -> None:
+    on = Characteristic(1, 10, "00000025", "On", False, "bool", ("pr", "pw"))
+    overrides = {
+        "light.kitchen_ceiling": {"aliases": ["kueche", "kitchen"]},
+    }
+    entities = build_entities(
+        [_accessory(1, "Kitchen Ceiling", "Lightbulb", on)],
+        overrides=overrides,
+    )
+    assert entities[0].entity_id == "light.kitchen_ceiling"
+    assert entities[0].aliases == ("kueche", "kitchen")
+
+
+def test_build_entities_rename_skips_collision() -> None:
+    on = Characteristic(1, 10, "00000025", "On", False, "bool", ("pr", "pw"))
+    overrides = {"light.bulb": {"entity_id": "light.bulb_2"}}
+    accessories = [
+        _accessory(1, "Bulb", "Lightbulb", on),
+        _accessory(2, "Bulb", "Lightbulb", on),
+    ]
+    entities = build_entities(accessories, overrides=overrides)
+    ids = sorted(e.entity_id for e in entities)
+    assert ids == ["light.bulb", "light.bulb_2"]
+
+
 def test_build_entities_lock_is_dangerous() -> None:
     target = Characteristic(1, 10, "0000001E", "LockMechanismTargetState", 0, "uint8", ("pr", "pw"))
     entities = build_entities([_accessory(1, "Front Door", "LockMechanism", target)])
