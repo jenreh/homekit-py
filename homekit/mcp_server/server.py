@@ -94,20 +94,6 @@ mcp: FastMCP = FastMCP("homekit-local", lifespan=lifespan)
 # --------------------------------------------------------------------- resources
 
 
-@mcp.resource("homekit://devices")
-async def resource_devices() -> list[dict[str, Any]]:
-    service = get_service()
-    pairings = await service.client.list_pairings()
-    return [_to_dict(p) for p in pairings]
-
-
-@mcp.resource("homekit://devices/{device_id}")
-async def resource_device(device_id: str) -> dict[str, Any]:
-    service = get_service()
-    accessories = await service.client.get_accessories(device_id)
-    return {"device_id": device_id, "accessories": [_to_dict(a) for a in accessories]}
-
-
 @mcp.resource("homekit://entities")
 async def resource_entities() -> list[dict[str, Any]]:
     service = get_service()
@@ -163,15 +149,6 @@ async def homekit_get_state(entity_id: str) -> dict[str, Any]:
     return _to_dict(await service.client.get_state(entity_id, refresh=True))
 
 
-@mcp.tool()
-async def homekit_identify(device_id: str) -> dict[str, Any]:
-    """Trigger the HAP identify routine (blink/beep) on an accessory."""
-    service = get_service()
-    await service.client.identify(device_id)
-    _audit("identify", device_id=device_id)
-    return {"ok": True, "device_id": device_id}
-
-
 # --------------------------------------------------------------------- tools (write)
 
 
@@ -199,10 +176,14 @@ async def homekit_set_light(
             await (service.client.turn_on if on else service.client.turn_off)(entity_id)
         )
     if brightness is not None:
-        results.append(await service.client.set_brightness(entity_id, float(brightness)))
+        results.append(
+            await service.client.set_brightness(entity_id, float(brightness))
+        )
     if color_temperature is not None:
         results.append(
-            await service.client.set_color_temperature(entity_id, int(color_temperature))
+            await service.client.set_color_temperature(
+                entity_id, int(color_temperature)
+            )
         )
     _audit(
         "set_light",
@@ -220,7 +201,9 @@ async def homekit_set_switch(entity_id: str, on: bool) -> dict[str, Any]:
     _require_writes()
     service = get_service()
     await service.client.list_entities()
-    result = await (service.client.turn_on if on else service.client.turn_off)(entity_id)
+    result = await (service.client.turn_on if on else service.client.turn_off)(
+        entity_id
+    )
     _audit("set_switch", entity_id=entity_id, on=on)
     return _to_dict(result)
 
@@ -244,7 +227,12 @@ async def homekit_set_climate(
         )
     if mode is not None:
         results.append(await service.client.set_target_mode(entity_id, int(mode)))
-    _audit("set_climate", entity_id=entity_id, target_temperature=target_temperature, mode=mode)
+    _audit(
+        "set_climate",
+        entity_id=entity_id,
+        target_temperature=target_temperature,
+        mode=mode,
+    )
     return {"results": [_to_dict(r) for r in results]}
 
 
@@ -271,9 +259,7 @@ async def homekit_lock(entity_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def homekit_unlock(
-    entity_id: str, confirmation_token: str
-) -> dict[str, Any]:
+async def homekit_unlock(entity_id: str, confirmation_token: str) -> dict[str, Any]:
     """Unlock a lock — requires `confirmation_token` per the dangerous-operations policy."""
     _require_writes()
     service = get_service()

@@ -22,21 +22,33 @@ light.bulb_3
 Defined in `SERVICE_DOMAIN_MAP` in
 [homekit/core/registry.py](../homekit/core/registry.py).
 
-| HAP Service           | Domain      |
-|----------------------|-------------|
-| Lightbulb            | `light` |
-| Switch / Outlet      | `switch` |
-| Thermostat           | `climate` |
-| TemperatureSensor    | `sensor` |
-| HumiditySensor       | `sensor` |
-| MotionSensor         | `sensor` |
-| ContactSensor        | `sensor` |
-| LockMechanism        | `lock` |
-| GarageDoorOpener     | `cover` |
-| WindowCovering       | `cover` |
-| Fan / FanV2          | `fan` |
-| AirPurifier          | `fan` |
-| SecuritySystem       | `security_system` |
+| HAP Service              | Domain           |
+|--------------------------|------------------|
+| Lightbulb                | `light`          |
+| Switch / Outlet          | `switch`         |
+| Thermostat               | `climate`        |
+| TemperatureSensor        | `sensor`         |
+| HumiditySensor           | `sensor`         |
+| MotionSensor             | `sensor`         |
+| ContactSensor            | `sensor`         |
+| LightSensor              | `sensor`         |
+| OccupancySensor          | `sensor`         |
+| AirQualitySensor         | `sensor`         |
+| CarbonDioxideSensor      | `sensor`         |
+| CarbonMonoxideSensor     | `sensor`         |
+| LeakSensor               | `sensor`         |
+| SmokeSensor              | `sensor`         |
+| BatteryService           | `sensor`         |
+| LockMechanism            | `lock`           |
+| SecuritySystem           | `security_system`|
+| GarageDoorOpener         | `cover`          |
+| WindowCovering           | `cover`          |
+| Window                   | `cover`          |
+| Door                     | `cover`          |
+| Fan / FanV2              | `fan`            |
+| AirPurifier              | `fan`            |
+| Speaker / Television     | `media_player`   |
+| VideoDoorbell            | `doorbell`       |
 
 Services not present in the map are intentionally **not** exposed as
 entities — they remain visible via `homekit accessories <device-id>` so you
@@ -59,18 +71,21 @@ EntityCapability(
 
 Domains map onto `safety_class` like so:
 
-| Domain          | Safety class |
-|----------------|-------------|
-| `lock`         | `dangerous` |
+| Domain | Safety class |
+| ---------------- | ------------- |
+| `lock` | `dangerous` |
 | `security_system` | `dangerous` |
-| `climate`      | `caution` |
-| `cover`        | `caution` |
+| `climate` | `caution` |
+| `cover` | `caution` |
 | everything else | `safe` |
 
 ## Overrides — `entities.toml`
 
-Drop a `~/.config/homekit/entities.toml` to pin display names, rooms, or
-aliases:
+Drop a `~/.config/homekit-local/entities.toml` to pin display names, rooms,
+aliases, or rename the canonical entity ID.
+
+The TOML section key is always the **auto-generated** entity ID (e.g.
+`cover.eve_shutter_switch_92e7`), not the renamed one.
 
 ```toml
 [entities."light.kitchen_ceiling"]
@@ -80,7 +95,23 @@ aliases = ["overhead", "ceiling lamp"]
 
 [entities."climate.hallway"]
 room = "Flur"
+
+# Rename the canonical entity-id.  The original id is preserved as an alias
+# automatically so existing automations keep working.
+[entities."cover.eve_shutter_switch_92e7"]
+entity_id = "rollo.esszimmer"
+name = "Esszimmer"
+aliases = ["esszimmer rollo", "rollo esszimmer"]
 ```
+
+Supported fields per entry:
+
+| Field       | Type            | Effect                        |
+|-------------|-----------------|-------------------------------|
+| `name`      | string          | Display name                  |
+| `room`      | string          | Room label                    |
+| `aliases`   | list of strings | Extra resolvable names        |
+| `entity_id` | string          | Rename the canonical entity ID|
 
 `homekit-py` will not invent rooms or scenes from the Apple Home database —
 that data lives outside HAP. Maintain the registry yourself if you need

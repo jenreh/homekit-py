@@ -29,11 +29,6 @@ async def homekit_service(
     await service.stop()
 
 
-async def test_resource_devices_lists_pairings(homekit_service: server.HomeKitService) -> None:
-    devices = await server.resource_devices()
-    assert {d["device_id"] for d in devices} >= {"AA:BB:CC", "DD:EE:FF"}
-
-
 async def test_resource_entities_returns_light_and_lock(
     homekit_service: server.HomeKitService,
 ) -> None:
@@ -48,13 +43,17 @@ async def test_tool_set_light_turns_on(homekit_service: server.HomeKitService) -
     assert payload["results"][0]["success"]
 
 
-async def test_tool_unlock_requires_token(homekit_service: server.HomeKitService) -> None:
+async def test_tool_unlock_requires_token(
+    homekit_service: server.HomeKitService,
+) -> None:
     await server.resource_entities()
     with pytest.raises(PolicyBlockedError):
         await server.homekit_unlock("lock.front_door", confirmation_token="")
 
 
-async def test_tool_unlock_with_token_succeeds(homekit_service: server.HomeKitService) -> None:
+async def test_tool_unlock_with_token_succeeds(
+    homekit_service: server.HomeKitService,
+) -> None:
     await server.resource_entities()
     payload = await server.homekit_unlock("lock.front_door", confirmation_token="ok")
     assert payload["success"]

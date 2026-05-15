@@ -1,0 +1,158 @@
+# homekit-py configuration
+# Place this file at ~/.config/homekit-local/config.toml
+#
+# Priority: environment variable > config.toml > built-in default
+# Environment variable format: HOMEKIT_<SECTION>__<KEY>
+#   e.g. HOMEKIT_DAEMON__IDLE_TIMEOUT_S=300
+#
+# Two path overrides apply before this file is read:
+#   HOMEKIT_CONFIG_DIR   — directory containing config.toml and daemon.pid
+#   HOMEKIT_PAIRING_DIR  — directory where pairings.json is stored
+
+# ---------------------------------------------------------------------------
+# Controller identity
+# ---------------------------------------------------------------------------
+[controller]
+
+# Name advertised to accessories during pairing.
+name = "homekit-local"
+
+# Stable controller ID (UUID).  Left empty → generated on first run.
+id = ""
+
+# ---------------------------------------------------------------------------
+# Discovery
+# ---------------------------------------------------------------------------
+[discovery]
+
+# How long (seconds) to scan for accessories during `homekit discover`.
+mdns_timeout_s = 15.0
+
+# Restrict discovery to IP/Wi-Fi accessories only (skip BLE and Thread).
+ip_only = false
+
+# Enable Bluetooth LE accessory discovery.
+ble_enabled = true
+
+# Enable Thread accessory discovery.
+thread_enabled = true
+
+# ---------------------------------------------------------------------------
+# Connection
+# ---------------------------------------------------------------------------
+[connection]
+
+# How connections to accessories are managed.
+#   "ondemand"   — open a new TCP/BLE session for every command, close after.
+#   "persistent" — keep the session open across commands (lower latency,
+#                  higher resource use).
+mode = "ondemand"
+
+# Timeout (seconds) for a single HAP request (read/write characteristic).
+request_timeout_s = 10.0
+
+# Timeout (seconds) for BLE-specific operations (connection + GATT exchange).
+ble_timeout_s = 30.0
+
+# How long (seconds) to wait before attempting to reconnect a dropped event
+# subscription.
+event_reconnect_delay_s = 2.0
+
+# Polling interval (seconds) used as a fallback when push events are not
+# supported by an accessory.
+event_poll_fallback_s = 30.0
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+[cache]
+
+# How long (seconds) to keep a fetched accessory layout in memory before
+# re-fetching it from the device.  The cache is invalidated automatically
+# when the accessory increments its config number (c#).
+ttl_seconds = 3600
+
+# ---------------------------------------------------------------------------
+# Storage (pairing credentials)
+# ---------------------------------------------------------------------------
+[storage]
+
+# Where to persist pairing credentials.
+#   "keyring" — OS keychain (macOS Keychain, GNOME Wallet, …); the JSON file
+#               is kept in sync as a readable fallback.
+#   "file"    — plain JSON file only (no keychain); suitable for headless
+#               environments.
+backend = "keyring"
+
+# Explicit directory for pairings.json.  Defaults to
+# $HOMEKIT_CONFIG_DIR/pairings.  Override via HOMEKIT_PAIRING_DIR env var.
+pairing_dir = ""
+
+# ---------------------------------------------------------------------------
+# MCP server
+# ---------------------------------------------------------------------------
+[mcp]
+
+# Default safety level for the MCP tool surface.
+#   "read_only"  — only state-read tools are exposed.
+#   "read_write" — state-read and control tools are both exposed.
+default_mode = "read_only"
+
+# Expose write tools (turn_on, set_brightness, …) via MCP.
+# Has no effect when default_mode = "read_only".
+allow_write_tools = false
+
+# Expose raw characteristic write tool via MCP.  Requires allow_write_tools.
+allow_raw_characteristic_writes = false
+
+# Interface the MCP server binds to.  Use 127.0.0.1 to restrict to localhost.
+bind_host = "127.0.0.1"
+
+# Write an audit log entry for every MCP tool invocation.
+audit_log = true
+
+# ---------------------------------------------------------------------------
+# Daemon
+# ---------------------------------------------------------------------------
+[daemon]
+
+# Route CLI commands through the background daemon instead of connecting
+# directly.  Disable to always use direct connections (slower but simpler).
+enabled = true
+
+# Spawn the daemon automatically if it is not already running when a CLI
+# command is issued.
+auto_spawn = true
+
+# Unix-socket path the daemon listens on.
+# Default: $HOMEKIT_CONFIG_DIR/daemon.sock
+socket_path = ""
+
+# Path to the daemon PID file.
+# Default: $HOMEKIT_CONFIG_DIR/daemon.pid
+pid_path = ""
+
+# Path to the daemon rotating log file (1 MiB per file, 3 files kept).
+# Default: $XDG_CACHE_HOME/homekit/daemon.log
+log_path = ""
+
+# Shut the daemon down after this many seconds with no connected clients.
+# Set to 0 to keep the daemon running indefinitely.
+idle_timeout_s = 600
+
+# ---------------------------------------------------------------------------
+# Dangerous operations policy
+# ---------------------------------------------------------------------------
+# Controls what happens when a "dangerous" operation is requested.
+# Keys are "{domain}.{action}" strings.
+#
+# Allowed policy values:
+#   "allow"                — execute immediately, no confirmation needed.
+#   "confirmation_required"— require a one-time token (CLI will prompt).
+#   "disabled"             — refuse the operation entirely.
+
+[dangerous_operations]
+"lock.unlock"           = "confirmation_required"
+"garage.open"           = "disabled"
+"security_system.disarm"= "disabled"
+"cover.open"            = "allow"
