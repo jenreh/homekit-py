@@ -102,7 +102,7 @@ homekit watch light.living_room
 ## CLI reference
 
 ```text
-homekit [--verbose] <command>
+homekit [--verbose] [--no-daemon] <command>
 ```
 
 | Command | Description |
@@ -119,21 +119,33 @@ homekit [--verbose] <command>
 | `homekit brightness ENTITY_ID VALUE` | Set brightness (0–100) |
 | `homekit color-temp ENTITY_ID KELVIN` | Set colour temperature |
 | `homekit temperature ENTITY_ID CELSIUS` | Set thermostat target |
-| `homekit lock ENTITY_ID` | Lock a lock entity |
-| `homekit watch ENTITY_ID` | Stream real-time state changes |
+| `homekit lock ENTITY_ID [--confirm TOKEN]` | Lock a lock entity |
+| `homekit unlock ENTITY_ID [--confirm TOKEN]` | Unlock a lock entity |
+| `homekit position ENTITY_ID PERCENT` | Set the target position of a cover/window/garage |
+| `homekit identify DEVICE_ID` | Trigger the accessory identify action |
+| `homekit accessories DEVICE_ID` | Dump accessory, service, and characteristic details |
+| `homekit watch [ENTITY_ID ...]` | Stream real-time state changes for one, many, or all entities |
 | `homekit pairings list` | List stored pairings |
 | `homekit pairings export --out FILE` | Back up pairing store to JSON |
 | `homekit pairings import FILE` | Restore pairings from a JSON backup |
 | `homekit diagnose mdns` | Check mDNS / Bonjour health |
 | `homekit diagnose network` | Check network reachability |
+| `homekit diagnose pairability` | Check whether discovered accessories are pairable |
 | `homekit diagnose storage` | Verify pairing-store integrity |
-| `homekit raw get DEVICE_ID AID IID` | Read a raw HAP characteristic |
-| `homekit raw set DEVICE_ID AID IID VAL` | Write a raw HAP characteristic |
+| `homekit diagnose mcp-security` | Check MCP exposure and write-policy safety |
+| `homekit diagnose all` | Run every diagnostic and exit non-zero on failures |
+| `homekit raw read DEVICE_ID AID IID` | Read a raw HAP characteristic |
+| `homekit raw write DEVICE_ID AID IID VALUE` | Write a raw HAP characteristic |
+| `homekit daemon status` | Show whether the background daemon is reachable |
+| `homekit daemon start` | Start or connect to the background daemon |
+| `homekit daemon stop` | Stop the background daemon |
+| `homekit daemon restart` | Restart the background daemon |
+| `homekit daemon logs [-n LINES]` | Tail the daemon log file |
 
-Use `--json` for machine-readable output:
+Many read-style commands accept `--json` for machine-readable output. Place it after the command name:
 
 ```bash
-homekit --json entities | jq '.[].entity_id'
+homekit entities --json | jq '.[].entity_id'
 ```
 
 ---
@@ -210,7 +222,7 @@ homekit-mcp --transport streamable-http --host 127.0.0.1 --port 8765
 
 #### Read (always available)
 
-`homekit_list_entities` · `homekit_get_state` · `homekit_identify`
+`homekit_list_entities` · `homekit_get_state`
 
 #### Write (requires `allow_write_tools = true`)
 
@@ -218,7 +230,7 @@ homekit-mcp --transport streamable-http --host 127.0.0.1 --port 8765
 
 #### Resources
 
-`homekit://devices` · `homekit://devices/{device_id}` · `homekit://entities` · `homekit://entities/{entity_id}` · `homekit://state/{entity_id}` · `homekit://capabilities/{entity_id}` · `homekit://events/recent`
+`homekit://entities` · `homekit://entities/{entity_id}` · `homekit://state/{entity_id}` · `homekit://capabilities/{entity_id}` · `homekit://events/recent`
 
 ---
 
@@ -293,12 +305,12 @@ Default: `lock.unlock` → `confirmation_required`, `garage.open` and `security_
 
 ## Docs
 
-- [docs/pairing.md](docs/pairing.md) — pairing flow, key backup, recovery
-- [docs/protocol.md](docs/protocol.md) — HAP primer, AID/IID, characteristic types
-- [docs/entity-model.md](docs/entity-model.md) — service→domain mapping, `entities.toml` overrides
-- [docs/daemon.md](docs/daemon.md) — daemon mode, wire protocol, RPC methods
-- [docs/config.toml.example](docs/config.toml.example) — fully-annotated config reference
-- [docs/troubleshooting.md](docs/troubleshooting.md) — mDNS, VLAN, connection limits
+- [docs/pairing.md](https://github.com/jenreh/homekit-py/blob/main/docs/pairing.md) — pairing flow, key backup, recovery
+- [docs/protocol.md](https://github.com/jenreh/homekit-py/blob/main/docs/protocol.md) — HAP primer, AID/IID, characteristic types
+- [docs/entity-model.md](https://github.com/jenreh/homekit-py/blob/main/docs/entity-model.md) — service→domain mapping, `entities.toml` overrides
+- [docs/daemon.md](https://github.com/jenreh/homekit-py/blob/main/docs/daemon.md) — daemon mode, wire protocol, RPC methods
+- [docs/config.toml.example](https://github.com/jenreh/homekit-py/blob/main/docs/config.toml.example) — fully-annotated config reference
+- [docs/troubleshooting.md](https://github.com/jenreh/homekit-py/blob/main/docs/troubleshooting.md) — mDNS, VLAN, connection limits
 
 ---
 
