@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 ![Tests](https://img.shields.io/badge/tests-88%20passing-brightgreen)
-![Version](https://img.shields.io/badge/version-0.4.1-blue)
+![Version](https://img.shields.io/badge/version-0.4.2-blue)
 
 **homekit-py** talks directly to your accessories over the local network — no Apple cloud, no Apple ID, no internet required. HAP is cryptographically complex (SRP, Ed25519, Curve25519, ChaCha20-Poly1305, TLV8); this project delegates the wire protocol to `aiohomekit` and wraps it in a stable `HomeKitBackend` interface with a clean entity model.
 
