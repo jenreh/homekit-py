@@ -1,6 +1,6 @@
 [project]
 name = "homekit-py"
-version = "0.4.1"
+version = "0.4.2"
 description = "Local control of Apple HomeKit devices via HAP: library, CLI, and MCP server"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -81,7 +81,7 @@ exclude = [
 
 [tool.bumpversion]
 commit = false
-current_version = "0.4.1"
+current_version = "0.4.2"
 tag = false
 allow-dirty = false
 
@@ -92,7 +92,7 @@ replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = "README.md"
-search = '![Version](https://img.shields.io/badge/version-{current_version}-blue)"'
+search = '![Version](https://img.shields.io/badge/version-{current_version}-blue)'
 replace = '![Version](https://img.shields.io/badge/version-{new_version}-blue)'
 
 [tool.ruff]
