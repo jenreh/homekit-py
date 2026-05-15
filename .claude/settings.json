@@ -24,7 +24,7 @@
       "Bash(keyring get *)",
       "Bash(time .venv/bin/python -c ' *)",
       "Bash(.venv.mac/bin/python -c ' *)",
-      "Bash(.venv.mac/bin/python *)",
+      "Bash(.venv.mac/bin/python *)"
     ],
     "defaultMode": "acceptEdits"
   }
