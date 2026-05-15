@@ -104,17 +104,17 @@ def _build_capability(service: Service, domain: str) -> EntityCapability:
             writable.add(char.type_name)
         if char.unit:
             units[char.type_name] = char.unit
-        if char.type_name == "LockCurrentState":
+        if char.type_name == "LockMechanismCurrentState":
             enum_values[char.type_name] = LOCK_STATE_NAMES
-        elif char.type_name == "LockTargetState":
+        elif char.type_name == "LockMechanismTargetState":
             enum_values[char.type_name] = {
                 k: v for k, v in LOCK_STATE_NAMES.items() if k in (0, 1)
             }
-        elif char.type_name in {"CurrentDoorState", "TargetDoorState"}:
+        elif char.type_name in {"DoorStateCurrent", "DoorStateTarget"}:
             enum_values[char.type_name] = DOOR_STATE_NAMES
         elif char.type_name in {
-            "CurrentHeatingCoolingState",
-            "TargetHeatingCoolingState",
+            "HeatingCoolingCurrent",
+            "HeatingCoolingTarget",
         }:
             enum_values[char.type_name] = HEATING_COOLING_STATE_NAMES
     return EntityCapability(

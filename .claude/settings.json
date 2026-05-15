@@ -1,23 +1,30 @@
 {
-    "permissions": {
-        "defaultMode": "acceptEdits",
-        "allow": [
-            "Bash(python)",
-            "Bash(python *)",
-            "Bash(python3)",
-            "Bash(python3 *)",
-            "Bash(pytest)",
-            "Bash(pytest *)",
-            "Bash(pip)",
-            "Bash(pip *)",
-            "Bash(pip3)",
-            "Bash(pip3 *)",
-            "Bash(uv)",
-            "Bash(uv *)",
-            "Bash(poetry)",
-            "Bash(poetry *)",
-            "Bash(git stash *)",
-            "Bash(task *)"
-        ]
-    }
+  "permissions": {
+    "allow": [
+      "Bash(python)",
+      "Bash(python *)",
+      "Bash(python3)",
+      "Bash(python3 *)",
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(pip)",
+      "Bash(pip *)",
+      "Bash(pip3)",
+      "Bash(pip3 *)",
+      "Bash(uv)",
+      "Bash(uv *)",
+      "Bash(poetry)",
+      "Bash(poetry *)",
+      "Bash(git stash *)",
+      "Bash(task *)",
+      "WebFetch(domain:www.home-assistant.io)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//Users/jens/Library/Application Support/homekit/pairings/**)",
+      "Bash(keyring get *)",
+      "Bash(time .venv/bin/python -c ' *)",
+      "Bash(.venv.mac/bin/python -c ' *)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
 }

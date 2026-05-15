@@ -51,7 +51,7 @@ def test_build_entities_collision_suffix() -> None:
 
 
 def test_build_entities_lock_is_dangerous() -> None:
-    target = Characteristic(1, 10, "0000001E", "LockTargetState", 0, "uint8", ("pr", "pw"))
+    target = Characteristic(1, 10, "0000001E", "LockMechanismTargetState", 0, "uint8", ("pr", "pw"))
     entities = build_entities([_accessory(1, "Front Door", "LockMechanism", target)])
     assert entities[0].capability.safety_class == "dangerous"
     assert entities[0].domain == "lock"

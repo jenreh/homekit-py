@@ -62,4 +62,4 @@ def test_pairing_dir_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 def test_home_kit_config_constructable_without_paths() -> None:
     cfg = HomeKitConfig()
-    assert cfg.discovery.mdns_timeout_s == 5.0
+    assert cfg.discovery.mdns_timeout_s == 15.0

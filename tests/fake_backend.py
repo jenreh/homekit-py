@@ -80,10 +80,10 @@ def _lock_accessory(device_id: str, name: str = "Front Door") -> Accessory:
         ),
     )
     current = Characteristic(
-        1, 20, "0000001D", "LockCurrentState", 1, "uint8", ("pr", "ev")
+        1, 20, "0000001D", "LockMechanismCurrentState", 1, "uint8", ("pr", "ev")
     )
     target = Characteristic(
-        1, 21, "0000001E", "LockTargetState", 1, "uint8", ("pr", "pw")
+        1, 21, "0000001E", "LockMechanismTargetState", 1, "uint8", ("pr", "pw")
     )
     lock = Service(1, 19, "00000045", "LockMechanism", (current, target), is_primary=True)
     return Accessory(1, device_id, name, (info, lock))

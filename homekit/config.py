@@ -30,7 +30,7 @@ class ControllerSettings(BaseModel):
 
 
 class DiscoverySettings(BaseModel):
-    mdns_timeout_s: float = 5.0
+    mdns_timeout_s: float = 15.0
     ip_only: bool = False
     ble_enabled: bool = True
     thread_enabled: bool = True

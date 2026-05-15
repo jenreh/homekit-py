@@ -317,9 +317,9 @@ class HomeKitClient:
             "light": "On",
             "switch": "On",
             "fan": "On",
-            "lock": "LockCurrentState",
-            "cover": "CurrentPosition",
-            "climate": "CurrentTemperature",
+            "lock": "LockMechanismCurrentState",
+            "cover": "PositionCurrent",
+            "climate": "TemperatureCurrent",
             "sensor": _primary_sensor_characteristic(service.type_name),
             "security_system": "SecuritySystemCurrentState",
         }
@@ -381,11 +381,11 @@ class HomeKitClient:
 
 
 _SENSOR_PRIMARY: dict[str, str] = {
-    "TemperatureSensor": "CurrentTemperature",
-    "HumiditySensor": "CurrentRelativeHumidity",
+    "TemperatureSensor": "TemperatureCurrent",
+    "HumiditySensor": "RelativeHumidityCurrent",
     "MotionSensor": "MotionDetected",
-    "ContactSensor": "ContactSensorState",
-    "LightSensor": "CurrentAmbientLightLevel",
+    "ContactSensor": "ContactState",
+    "LightSensor": "LightLevelCurrent",
     "OccupancySensor": "OccupancyDetected",
     "AirQualitySensor": "AirQuality",
     "CarbonDioxideSensor": "CarbonDioxideLevel",

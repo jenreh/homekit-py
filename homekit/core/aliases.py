@@ -25,15 +25,15 @@ SET_BRIGHTNESS = AliasSpec(("Lightbulb",), "Brightness")
 SET_COLOR_TEMPERATURE = AliasSpec(("Lightbulb",), "ColorTemperature")
 SET_HUE = AliasSpec(("Lightbulb",), "Hue")
 SET_SATURATION = AliasSpec(("Lightbulb",), "Saturation")
-SET_TARGET_TEMPERATURE = AliasSpec(("Thermostat",), "TargetTemperature")
+SET_TARGET_TEMPERATURE = AliasSpec(("Thermostat",), "TemperatureTarget")
 SET_TARGET_HEATING_COOLING_STATE = AliasSpec(
-    ("Thermostat",), "TargetHeatingCoolingState"
+    ("Thermostat",), "HeatingCoolingTarget"
 )
-SET_LOCK = AliasSpec(("LockMechanism",), "LockTargetState")
+SET_LOCK = AliasSpec(("LockMechanism",), "LockMechanismTargetState")
 SET_TARGET_POSITION = AliasSpec(
-    ("WindowCovering", "Window", "Door", "GarageDoorOpener"), "TargetPosition"
+    ("WindowCovering", "Window", "Door", "GarageDoorOpener"), "PositionTarget"
 )
-SET_TARGET_DOOR_STATE = AliasSpec(("GarageDoorOpener",), "TargetDoorState")
+SET_TARGET_DOOR_STATE = AliasSpec(("GarageDoorOpener",), "DoorStateTarget")
 SET_ROTATION_SPEED = AliasSpec(("Fan", "FanV2"), "RotationSpeed")
 
 

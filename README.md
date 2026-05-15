@@ -54,6 +54,17 @@ homekit discover
 
 ### 2. Pair the accessory
 
+> [!IMPORTANT]
+> An accessory can only be paired with **one controller at a time**. If the device is already paired (with Apple Home, another `homekit-py` install, Home Assistant, etc.) the `homekit discover` output will show `paired` and `homekit pair` will fail with `AlreadyPairedError`.
+>
+> Before pairing, remove the device from its current controller:
+>
+> - **Apple Home:** open the Home app → tap the accessory → *Remove Accessory* (do **not** factory-reset unless instructed by the vendor).
+> - **Other controller:** run its `unpair` equivalent.
+> - **Lost the keys:** factory-reset the device per the vendor's instructions (typically a long button press).
+>
+> After removal the device re-advertises with `sf=1` (pairable) within a few seconds; re-run `homekit discover` to confirm.
+
 Enter the 8-digit PIN from the accessory's label or display:
 
 ```bash

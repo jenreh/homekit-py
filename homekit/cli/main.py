@@ -37,13 +37,13 @@ from homekit.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-console = Console(stderr=False)
-err_console = Console(stderr=True)
+console = Console(stderr=False, emoji=False)
+err_console = Console(stderr=True, emoji=False)
 
 
 app = typer.Typer(
     no_args_is_help=True,
-    add_completion=False,
+    add_completion=True,
     help="homekit — local control of Apple HomeKit accessories via HAP",
 )
 pairings_app = typer.Typer(help="Manage stored pairings")
@@ -132,13 +132,20 @@ def _root(
 
 @app.command("discover")
 def cmd_discover(
-    timeout: float = typer.Option(5.0, "--timeout", help="Browse duration in seconds"),
+    timeout: float = typer.Option(
+        0.0,
+        "--timeout",
+        help=(
+            "Browse duration in seconds. 0 = use [discovery].mdns_timeout_s. "
+            "Battery-powered BLE accessories may need 20–60 s."
+        ),
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of a table"),
 ) -> None:
     """Browse mDNS for advertised HomeKit accessories."""
 
     async def _action(client: HomeKitClient) -> list[Any]:
-        return await client.discover(timeout)
+        return await client.discover(timeout if timeout > 0 else None)
 
     accessories = _run(_with_client(_action))
     if as_json:

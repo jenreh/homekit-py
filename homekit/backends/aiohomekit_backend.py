@@ -18,6 +18,7 @@ from aiohomekit.exceptions import (
     AuthenticationError,
     UnknownError,
 )
+from aiohomekit.model import Accessories, AccessoriesState
 from aiohomekit.model.characteristics import CharacteristicsTypes
 from aiohomekit.model.services import ServicesTypes
 from bleak import BleakScanner
@@ -67,10 +68,21 @@ class _CompatBleakScanner(BleakScanner):
         super().__init__(detection_callback=self._on_detect)
 
     def _on_detect(self, device: Any, advertisement_data: Any) -> None:
-        if self._pending_callback is not None:
+        if self._pending_callback is None:
+            return
+        try:
             self._pending_callback(device, advertisement_data)
+        except AttributeError as exc:
+            # aiohomekit 3.2.x crashes when an advert arrives for a paired
+            # accessory whose accessories_state hasn't been populated yet
+            # (pairing.py:_update_cached_state_num accesses .state_num on
+            # None). Swallow so the scanner keeps running.
+            logger.debug("BLE detect callback raised: %s", exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("BLE detect callback raised: %s", exc)
 
-    def register_detection_callback(self, callback: Any) -> None:  # noqa: ANN401
+    def register_detection_callback(self, callback: Any) -> None:
+        """Re-implement the API removed in bleak 0.21 so aiohomekit can call it."""
         self._pending_callback = callback
 
 
@@ -99,6 +111,27 @@ _CHAR_NAMES = _build_reverse_map(CharacteristicsTypes)
 
 def _noop_handler(*_: Any, **__: Any) -> None:
     """Required by zeroconf's `AsyncServiceBrowser`; aiohomekit drives state itself."""
+
+
+def _ensure_accessories_state(pairing: Any) -> None:
+    """Initialise ``pairing._accessories_state`` to an empty placeholder.
+
+    aiohomekit 3.2.x reads ``_accessories_state.state_num`` from the BLE
+    advertisement handler before the first GET /accessories call. For freshly
+    paired BLE devices the cache is empty, so the attribute is ``None`` and
+    the handler crashes. Pre-populating with an empty ``AccessoriesState``
+    keeps the handler happy until real accessory data is fetched.
+    """
+    if getattr(pairing, "_accessories_state", None) is None:
+        try:
+            pairing._accessories_state = AccessoriesState(  # noqa: SLF001
+                accessories=Accessories(),
+                config_num=0,
+                broadcast_key=None,
+                state_num=None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to seed accessories_state: %s", exc)
 
 
 def _normalize_uuid(value: str) -> str:
@@ -229,11 +262,12 @@ class AiohomekitBackend:
             self._controller.load_data(str(self._store.path))
         except FileNotFoundError:
             logger.debug("No pairing file present yet — first run")
-        for alias in list(self._controller.pairings):  # type: ignore[attr-defined]
+        for key in list(self._controller.pairings):  # type: ignore[attr-defined]
             try:
-                pairing = self._controller.pairings[alias]  # type: ignore[index]
+                pairing = self._controller.pairings[key]  # type: ignore[index]
             except KeyError:
                 continue
+            _ensure_accessories_state(pairing)
             device_id = self._device_id_for_pairing(pairing)
             if device_id:
                 self._pairings[device_id] = pairing
@@ -268,37 +302,71 @@ class AiohomekitBackend:
     # ------------------------------------------------------------------ discovery
 
     async def discover(self, timeout_s: float = 5.0) -> list[DiscoveredAccessory]:
+        """Poll all transports for up to ``timeout_s`` seconds.
+
+        BLE accessories advertise intermittently (battery-powered Eve devices
+        can be silent for 30+ s between adverts). One pass at the end of the
+        window misses them; instead poll every 0.5 s, accumulating uniques.
+        """
         ctrl = self._require_controller()
-        await asyncio.sleep(timeout_s)  # let the mDNS browser collect responses
         found: dict[str, DiscoveredAccessory] = {}
-        async for discovery in ctrl.async_discover():
-            accessory = self._discovery_to_dataclass(discovery)
-            if accessory is not None:
-                found[accessory.device_id] = accessory
+        deadline = asyncio.get_event_loop().time() + max(timeout_s, 1.0)
+        while True:
+            async for discovery in ctrl.async_discover():
+                accessory = self._discovery_to_dataclass(discovery)
+                if accessory is not None and accessory.device_id not in found:
+                    found[accessory.device_id] = accessory
+                    logger.debug(
+                        "discovered %s (%s, transport=%s)",
+                        accessory.name,
+                        accessory.device_id,
+                        getattr(accessory, "transport", "?"),
+                    )
+            if asyncio.get_event_loop().time() >= deadline:
+                break
+            await asyncio.sleep(0.5)
         return list(found.values())
 
     # ------------------------------------------------------------------ pairing
 
     async def pair(self, device_id: str, pin: str, alias: str) -> AccessoryPairing:
         ctrl = self._require_controller()
-        try:
-            discovery = await ctrl.async_find(device_id)
-        except Exception as exc:  # noqa: BLE001
-            raise AccessoryNotFoundError(
-                f"Accessory {device_id} not on the local network: {exc}"
-            ) from exc
+        discovery = await self._find_discovery(ctrl, device_id)
         if discovery.paired:
             raise AlreadyPairedError(
                 f"Accessory {device_id} reports it is already paired (sf=0)"
             )
+        success = False
         try:
             finish = await discovery.async_start_pairing(alias)
             pairing = await finish(pin)
+            success = True
         except AuthenticationError as exc:
             raise PairingError(f"Pairing rejected: {exc}") from exc
         except UnknownError as exc:
             raise NotPairableError(f"Accessory refused pairing: {exc}") from exc
+        finally:
+            if not success:
+                close = getattr(discovery, "_close", None) or getattr(
+                    discovery, "close", None
+                )
+                if callable(close):
+                    try:
+                        result = close()
+                        if asyncio.iscoroutine(result):
+                            await result
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("Discovery cleanup raised: %s", exc)
         device = device_id.upper()
+        # aiohomekit's BLE/IP discovery `finish_pairing` writes the new pairing
+        # into the sub-controller but does not always register it on the parent
+        # controller. Reload through `Controller.load_pairing` so `save_data`
+        # picks it up via `self.aliases`.
+        try:
+            ctrl.load_pairing(alias, dict(pairing.pairing_data))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_pairing post-finish raised: %s", exc)
+        _ensure_accessories_state(pairing)
         self._pairings[device] = pairing
         ctrl.save_data(str(self._store.path))
         self._store.sync_to_secure_store()
@@ -326,16 +394,34 @@ class AiohomekitBackend:
     async def list_pairings(self) -> list[AccessoryPairing]:
         ctrl = self._require_controller()
         out: list[AccessoryPairing] = []
-        for alias, pairing in ctrl.pairings.items():  # type: ignore[attr-defined]
+        # `ctrl.aliases` is keyed by the human-readable alias, `ctrl.pairings`
+        # is keyed by the device-id. Merge both so we get a stable alias even
+        # when the underlying pairing only registered itself in one of them.
+        seen: set[str] = set()
+        for alias, pairing in ctrl.aliases.items():  # type: ignore[attr-defined]
             device_id = self._device_id_for_pairing(pairing) or alias
             description = getattr(pairing, "description", None)
-            host = str(getattr(description, "address", "") or "")
-            port = int(getattr(description, "port", 0) or 0)
             out.append(
                 AccessoryPairing(
                     device_id=device_id.upper(),
-                    host=host,
-                    port=port,
+                    host=str(getattr(description, "address", "") or ""),
+                    port=int(getattr(description, "port", 0) or 0),
+                    name=alias,
+                    paired_at="",
+                )
+            )
+            seen.add(device_id.upper())
+        for device_id_key, pairing in ctrl.pairings.items():  # type: ignore[attr-defined]
+            device_id = self._device_id_for_pairing(pairing) or device_id_key
+            if device_id.upper() in seen:
+                continue
+            description = getattr(pairing, "description", None)
+            alias = self._store.get_alias_for_device(device_id) or device_id_key
+            out.append(
+                AccessoryPairing(
+                    device_id=device_id.upper(),
+                    host=str(getattr(description, "address", "") or ""),
+                    port=int(getattr(description, "port", 0) or 0),
                     name=alias,
                     paired_at="",
                 )
@@ -353,17 +439,70 @@ class AiohomekitBackend:
             cached = self._cache.load(device_id, config_number)
             if cached is not None:
                 return [_convert_accessory(a, device_id) for a in cached]
-        raw = await pairing.list_accessories_and_characteristics()
+        await self._await_pairing_reachable(device_id, timeout_s=20.0)
+        try:
+            await pairing.async_populate_accessories_state()
+            raw = await pairing.list_accessories_and_characteristics()
+        except Exception as exc:  # noqa: BLE001
+            if cached := self._cache.load(device_id, 0):
+                logger.warning(
+                    "Live fetch of %s failed (%s); using cached layout",
+                    device_id,
+                    exc,
+                )
+                return [_convert_accessory(a, device_id) for a in cached]
+            raise AccessoryNotFoundError(
+                f"Cannot reach {device_id}: {exc}. "
+                "For BLE devices: wake the accessory (button press) "
+                "and retry; battery-powered devices may sleep for minutes."
+            ) from exc
         self._cache.store(device_id, config_number, raw)
         return [_convert_accessory(a, device_id) for a in raw]
+
+    async def _await_pairing_reachable(
+        self, device_id: str, *, timeout_s: float = 20.0
+    ) -> None:
+        """Spin the discover loop until aiohomekit has seen a fresh advert.
+
+        BLE accessories advert intermittently — by the time a caller wants to
+        connect, the last advert from `homekit discover` may be stale. Run
+        ``async_discover`` repeatedly so the underlying ``BleController``
+        re-populates its ``discoveries`` cache before we attempt a connection.
+        """
+        ctrl = self._require_controller()
+        target = device_id.upper()
+        deadline = asyncio.get_event_loop().time() + max(timeout_s, 1.0)
+        while True:
+            async for discovery in ctrl.async_discover():
+                d_id = self._device_id_for_discovery(discovery)
+                if d_id and d_id.upper() == target:
+                    return
+            if asyncio.get_event_loop().time() >= deadline:
+                return
+            await asyncio.sleep(0.5)
+
+    def _device_id_for_discovery(self, discovery: AbstractDiscovery) -> str | None:
+        description = getattr(discovery, "description", None)
+        if description is None:
+            return None
+        d_id = getattr(description, "id", None) or getattr(
+            description, "device_id", None
+        )
+        return str(d_id).upper() if d_id else None
 
     async def read_characteristic(
         self, device_id: str, aid: int, iid: int
     ) -> Characteristic:
         pairing = await self._require_pairing(device_id)
-        result = await pairing.get_characteristics(
-            [(aid, iid)], include_meta=True, include_perms=True
-        )
+        await self._await_pairing_reachable(device_id, timeout_s=20.0)
+        kwargs = self._get_characteristics_kwargs(pairing)
+        try:
+            result = await pairing.get_characteristics([(aid, iid)], **kwargs)
+        except (TimeoutError, AccessoryDisconnectedError) as exc:
+            raise AccessoryNotFoundError(
+                f"Cannot reach {device_id}: {exc}. "
+                "Wake the accessory and retry."
+            ) from exc
         raw = result.get((aid, iid))
         if raw is None:
             raise AccessoryNotFoundError(f"Characteristic {aid}.{iid} not returned")
@@ -376,10 +515,14 @@ class AiohomekitBackend:
         self, device_id: str, aid: int, iid: int, value: Any
     ) -> CharacteristicWriteResult:
         pairing = await self._require_pairing(device_id)
+        await self._await_pairing_reachable(device_id, timeout_s=20.0)
         try:
             result = await pairing.put_characteristics([(aid, iid, value)])
-        except AccessoryDisconnectedError as exc:
-            raise NotPairedError(f"Accessory {device_id} not reachable: {exc}") from exc
+        except (TimeoutError, AccessoryDisconnectedError) as exc:
+            raise AccessoryNotFoundError(
+                f"Cannot reach {device_id}: {exc}. "
+                "Wake the accessory and retry."
+            ) from exc
         failures = (result or {}).get((aid, iid))
         if failures:
             status = int(failures.get("status", -1))
@@ -444,15 +587,59 @@ class AiohomekitBackend:
             raise RuntimeError("Backend is not started")
         return self._controller
 
+    async def _find_discovery(
+        self, ctrl: Controller, device_id: str
+    ) -> AbstractDiscovery:
+        target = device_id.upper()
+        try:
+            return await ctrl.async_find(target, timeout=10)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("async_find miss for %s: %s", target, exc)
+        deadline = asyncio.get_event_loop().time() + 30.0
+        seen: set[str] = set()
+        while asyncio.get_event_loop().time() < deadline:
+            async for discovery in ctrl.async_discover(timeout=5):
+                d_id = (
+                    getattr(getattr(discovery, "description", None), "id", None)
+                    or getattr(getattr(discovery, "description", None), "device_id", None)
+                )
+                if not d_id:
+                    continue
+                if str(d_id).upper() == target:
+                    return discovery
+                seen.add(str(d_id).upper())
+            await asyncio.sleep(1)
+        raise AccessoryNotFoundError(
+            f"Accessory {device_id} not on the local network "
+            f"(scanned IP + BLE for 30s; saw {len(seen)} other accessories)"
+        )
+
+    def _get_characteristics_kwargs(
+        self, pairing: AbstractPairing
+    ) -> dict[str, bool]:
+        """Return the include_* kwargs supported by this pairing's transport.
+
+        IP/CoAP pairings accept ``include_meta``/``include_perms``/...; BLE
+        pairings only accept the bare characteristics list and reject the
+        extra kwargs with ``TypeError``.
+        """
+        transport = getattr(pairing, "transport", None)
+        transport_name = getattr(transport, "value", None) or str(transport or "")
+        if "ble" in transport_name.lower():
+            return {}
+        return {"include_meta": True, "include_perms": True}
+
     async def _require_pairing(self, device_id: str) -> AbstractPairing:
         device = device_id.upper()
         pairing = self._pairings.get(device)
         if pairing is None:
             raise NotPairedError(f"No active pairing for {device}")
-        await pairing.async_populate_accessories_state()
         return pairing
 
     def _device_id_for_pairing(self, pairing: AbstractPairing) -> str | None:
+        pairing_id = getattr(pairing, "id", None)
+        if pairing_id:
+            return str(pairing_id).upper()
         description = getattr(pairing, "description", None)
         if description is None:
             return None
