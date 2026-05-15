@@ -45,6 +45,7 @@ simulator = ["HAP-python>=4.9.0"]
 [project.scripts]
 homekit = "homekit.cli.main:app"
 homekit-mcp = "homekit.mcp_server.server:main"
+homekit-daemon = "homekit.daemon.main:run"
 
 [project.urls]
 Homepage = "https://github.com/jenreh/homekit-py"
@@ -280,6 +281,7 @@ omit = [
     "homekit/core/backend.py",
     "homekit/cli/main.py",
     "homekit/mcp_server/server.py",
+    "homekit/daemon/main.py",
     "homekit/diagnostics/mdns.py",
     "homekit/diagnostics/network.py",
     "homekit/diagnostics/pairability.py",

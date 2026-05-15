@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import sys
-from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +16,10 @@ from rich.table import Table
 from homekit.cli import exit_codes as exits
 from homekit.client import HomeKitClient
 from homekit.config import load_config
+from homekit.daemon.client import DaemonRpcClient, RemoteHomeKitClient
+from homekit.daemon.lifecycle import ensure_running, stop_daemon
+from homekit.daemon.lifecycle import status as daemon_status
+from homekit.daemon.protocol import json_default
 from homekit.diagnostics.mcp_security import check_mcp_security
 from homekit.diagnostics.mdns import check_mdns
 from homekit.diagnostics.network import check_network
@@ -49,9 +52,11 @@ app = typer.Typer(
 pairings_app = typer.Typer(help="Manage stored pairings")
 diagnose_app = typer.Typer(help="Run diagnostic checks")
 raw_app = typer.Typer(help="Raw characteristic read/write")
+daemon_app = typer.Typer(help="Manage the homekit-py background daemon")
 app.add_typer(pairings_app, name="pairings")
 app.add_typer(diagnose_app, name="diagnose")
 app.add_typer(raw_app, name="raw")
+app.add_typer(daemon_app, name="daemon")
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -62,19 +67,7 @@ def _setup_logging(verbose: bool) -> None:
 
 
 def _print_json(payload: Any) -> None:
-    console.print_json(json.dumps(payload, default=_json_default))
-
-
-def _json_default(value: Any) -> Any:
-    if is_dataclass(value):
-        return asdict(value)
-    if isinstance(value, frozenset):
-        return sorted(value)
-    if isinstance(value, set):
-        return sorted(value)
-    if isinstance(value, Path):
-        return str(value)
-    raise TypeError(f"{type(value)!r} not serialisable")
+    console.print_json(json.dumps(payload, default=json_default))
 
 
 def _exit_for(exc: Exception) -> int:
@@ -109,8 +102,25 @@ def _run(coro: Any) -> Any:
         raise typer.Exit(code=_exit_for(exc)) from exc
 
 
+_NO_DAEMON: bool = False
+
+
 async def _with_client(action: Any) -> Any:
     config = load_config()
+    if config.daemon.enabled and not _NO_DAEMON:
+        ok = await ensure_running(
+            config.daemon.socket_path,
+            auto_spawn=config.daemon.auto_spawn,
+            log_path=config.daemon.log_path,
+        )
+        if ok:
+            rpc = DaemonRpcClient(config.daemon.socket_path)
+            try:
+                await rpc.connect()
+                return await action(RemoteHomeKitClient(rpc))
+            finally:
+                await rpc.close()
+        logger.warning("Daemon unreachable; falling back to in-process mode")
     async with HomeKitClient(config=config) as client:
         return await action(client)
 
@@ -122,8 +132,13 @@ async def _with_client(action: Any) -> Any:
 def _root(
     ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose logging"),
+    no_daemon: bool = typer.Option(
+        False, "--no-daemon", help="Bypass the daemon and run in-process for this call"
+    ),
 ) -> None:
-    ctx.obj = {"verbose": verbose}
+    global _NO_DAEMON
+    _NO_DAEMON = no_daemon
+    ctx.obj = {"verbose": verbose, "no_daemon": no_daemon}
     _setup_logging(verbose)
 
 
@@ -630,6 +645,91 @@ def cmd_diag_all() -> None:
             failures += 1
     if failures:
         raise typer.Exit(code=exits.ACCESSORY_UNREACHABLE)
+
+
+# ------------------------------------------------------------------ daemon control
+
+
+@daemon_app.command("status")
+def cmd_daemon_status() -> None:
+    """Show whether the background daemon is reachable."""
+    cfg = load_config()
+    st = daemon_status(cfg.daemon.socket_path, cfg.daemon.pid_path)
+    if st.running:
+        console.print(
+            f"[green]running[/green]  socket={st.socket_path}"
+            + (f"  pid={st.pid}" if st.pid else "")
+        )
+        return
+    console.print(
+        f"[yellow]not running[/yellow]  socket={st.socket_path}  ({st.detail})"
+    )
+    raise typer.Exit(code=1)
+
+
+@daemon_app.command("start")
+def cmd_daemon_start() -> None:
+    """Ensure a daemon is running (auto-spawn if needed)."""
+    cfg = load_config()
+
+    async def _go() -> bool:
+        return await ensure_running(
+            cfg.daemon.socket_path,
+            auto_spawn=True,
+            log_path=cfg.daemon.log_path,
+        )
+
+    if asyncio.run(_go()):
+        console.print(f"Daemon ready at {cfg.daemon.socket_path}")
+        return
+    err_console.print("[red]Daemon failed to start[/red]")
+    raise typer.Exit(code=exits.ACCESSORY_UNREACHABLE)
+
+
+@daemon_app.command("stop")
+def cmd_daemon_stop() -> None:
+    """Gracefully stop the running daemon."""
+    cfg = load_config()
+    ok = asyncio.run(stop_daemon(cfg.daemon.socket_path))
+    if ok:
+        console.print("Daemon stopped")
+        return
+    err_console.print("[yellow]No daemon was running[/yellow]")
+
+
+@daemon_app.command("restart")
+def cmd_daemon_restart() -> None:
+    """Stop the running daemon (if any) and start a fresh one."""
+    cfg = load_config()
+
+    async def _go() -> bool:
+        await stop_daemon(cfg.daemon.socket_path)
+        return await ensure_running(
+            cfg.daemon.socket_path,
+            auto_spawn=True,
+            log_path=cfg.daemon.log_path,
+        )
+
+    if asyncio.run(_go()):
+        console.print(f"Daemon restarted at {cfg.daemon.socket_path}")
+        return
+    err_console.print("[red]Daemon failed to restart[/red]")
+    raise typer.Exit(code=exits.ACCESSORY_UNREACHABLE)
+
+
+@daemon_app.command("logs")
+def cmd_daemon_logs(
+    lines: int = typer.Option(50, "--lines", "-n", help="Tail this many lines"),
+) -> None:
+    """Show the tail of the daemon log file."""
+    cfg = load_config()
+    log_path = Path(cfg.daemon.log_path)
+    if not log_path.exists():
+        err_console.print(f"[yellow]No log file at {log_path}[/yellow]")
+        raise typer.Exit(code=1)
+    with log_path.open("r", encoding="utf-8", errors="replace") as fh:
+        tail = fh.readlines()[-lines:]
+    console.print("".join(tail), end="")
 
 
 def main() -> None:  # entry point alternative for `python -m homekit.cli.main`

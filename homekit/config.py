@@ -61,6 +61,15 @@ class McpSettings(BaseModel):
     audit_log: bool = True
 
 
+class DaemonSettings(BaseModel):
+    enabled: bool = True
+    auto_spawn: bool = True
+    socket_path: str = ""
+    idle_timeout_s: int = 600
+    log_path: str = ""
+    pid_path: str = ""
+
+
 DangerousPolicy = Literal["allow", "confirmation_required", "disabled"]
 
 
@@ -96,6 +105,7 @@ class HomeKitConfig(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     mcp: McpSettings = Field(default_factory=McpSettings)
+    daemon: DaemonSettings = Field(default_factory=DaemonSettings)
     dangerous_operations: dict[str, DangerousPolicy] = Field(
         default_factory=lambda: {
             "lock.unlock": "confirmation_required",
@@ -172,10 +182,19 @@ def load_config(config_dir: Path | None = None) -> HomeKitConfig:
     pairing.mkdir(parents=True, exist_ok=True)
     cache = _cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
+    daemon = cfg.daemon.model_copy(
+        update={
+            "socket_path": cfg.daemon.socket_path
+            or str(base_dir / "daemon.sock"),
+            "log_path": cfg.daemon.log_path or str(cache / "daemon.log"),
+            "pid_path": cfg.daemon.pid_path or str(base_dir / "daemon.pid"),
+        }
+    )
     return cfg.model_copy(
         update={
             "config_dir": base_dir,
             "pairing_dir": pairing,
             "cache_dir": cache,
+            "daemon": daemon,
         }
     )
