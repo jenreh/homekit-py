@@ -32,7 +32,7 @@ pip install homekit-py
 uv add homekit-py
 ```
 
-Requires Python 3.14+. Pairing material is stored via the OS keychain (`keyring`) with an encrypted file fallback in `~/.config/homekit/pairings/`.
+Requires Python 3.14+. Pairing material is stored via the OS keychain (`keyring`) with an encrypted file fallback in `~/.config/homekit-local/pairings/`.
 
 ---
 
@@ -71,7 +71,7 @@ Enter the 8-digit PIN from the accessory's label or display:
 homekit pair AA:BB:CC:DD:EE:FF --pin 123-45-678 --alias "Living Room"
 ```
 
-Pairing data is saved to `~/.config/homekit/pairings/`. You only do this once.
+Pairing data is saved to `~/.config/homekit-local/pairings/`. You only do this once.
 
 ### 3. Control
 
@@ -177,7 +177,7 @@ homekit-mcp --transport streamable-http --host 127.0.0.1 --port 8765
 ```
 
 > [!WARNING]
-> The MCP server is **read-only by default**. Set `[mcp].allow_write_tools = true` in `~/.config/homekit/config.toml` to expose write tools.
+> The MCP server is **read-only by default**. Set `[mcp].allow_write_tools = true` in `~/.config/homekit-local/config.toml` to expose write tools.
 
 ### Claude Desktop
 
@@ -224,14 +224,14 @@ homekit-mcp --transport streamable-http --host 127.0.0.1 --port 8765
 
 ## Configuration
 
-Config file: `~/.config/homekit/config.toml`
+Config file: `~/.config/homekit-local/config.toml`
 
 ```toml
 [controller]
 name = "homekit-local"
 
 [discovery]
-mdns_timeout_s = 5.0
+mdns_timeout_s = 15.0
 ip_only = false
 
 [connection]
@@ -249,12 +249,19 @@ allow_write_tools = false
 allow_raw_characteristic_writes = false
 audit_log = true
 
+[daemon]
+enabled = true
+auto_spawn = true
+idle_timeout_s = 600      # seconds; 0 = never shut down
+
 [dangerous_operations]
 "lock.unlock" = "confirmation_required"
 "garage.open" = "disabled"
 "security_system.disarm" = "disabled"
 "cover.open" = "allow"
 ```
+
+See [docs/config.toml.example](docs/config.toml.example) for a fully-annotated reference with every available key.
 
 Environment variable overrides:
 
@@ -264,6 +271,9 @@ Environment variable overrides:
 | `HOMEKIT_PAIRING_DIR` | pairing store directory |
 | `HOMEKIT_CONNECTION__REQUEST_TIMEOUT_S` | `connection.request_timeout_s` |
 | `HOMEKIT_MCP__ALLOW_WRITE_TOOLS` | `mcp.allow_write_tools` |
+| `HOMEKIT_DAEMON__ENABLED` | `daemon.enabled` |
+| `HOMEKIT_DAEMON__AUTO_SPAWN` | `daemon.auto_spawn` |
+| `HOMEKIT_DAEMON__IDLE_TIMEOUT_S` | `daemon.idle_timeout_s` |
 
 ---
 
@@ -285,7 +295,9 @@ Default: `lock.unlock` → `confirmation_required`, `garage.open` and `security_
 
 - [docs/pairing.md](docs/pairing.md) — pairing flow, key backup, recovery
 - [docs/protocol.md](docs/protocol.md) — HAP primer, AID/IID, characteristic types
-- [docs/entity-model.md](docs/entity-model.md) — service→domain mapping, registry
+- [docs/entity-model.md](docs/entity-model.md) — service→domain mapping, `entities.toml` overrides
+- [docs/daemon.md](docs/daemon.md) — daemon mode, wire protocol, RPC methods
+- [docs/config.toml.example](docs/config.toml.example) — fully-annotated config reference
 - [docs/troubleshooting.md](docs/troubleshooting.md) — mDNS, VLAN, connection limits
 
 ---

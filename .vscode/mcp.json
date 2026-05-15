@@ -36,11 +36,19 @@
             ],
             "cwd": "/Users/jens/Workspace/projekte/harmonyhub-py"
         },
-        "homekit": {
+        "hue": {
             "command": "uv",
             "args": [
                 "run",
                 "hue-mcp"
+            ],
+            "cwd": "/Users/jens/Workspace/projekte/huehub-py"
+        },
+        "homekit": {
+            "command": "uv",
+            "args": [
+                "run",
+                "homekit-mcp"
             ],
             "cwd": "/Users/jens/Workspace/projekte/homekit-py"
         }
