@@ -1,6 +1,6 @@
 # homekit-py
 
-![Version](https://img.shields.io/badge/version-0.4.3-blue)
+![Version](https://img.shields.io/badge/version-0.4.4-blue)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
