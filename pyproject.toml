@@ -46,6 +46,7 @@ simulator = ["HAP-python>=4.9.0"]
 homekit = "homekit.cli.main:app"
 homekit-mcp = "homekit.mcp_server.server:main"
 homekit-daemon = "homekit.daemon.main:run"
+homekit-py = "homekit.mcp_server.server:main"
 
 [project.urls]
 Homepage = "https://github.com/jenreh/homekit-py"

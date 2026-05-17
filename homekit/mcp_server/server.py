@@ -297,10 +297,10 @@ def main(argv: list[str] | None = None) -> None:
         kwargs: dict[str, Any] = {"host": host}
         if args.port is not None:
             kwargs["port"] = args.port
-        mcp.run(transport=args.transport, **kwargs)
+        mcp.run(transport=args.transport, show_banner=False, **kwargs)
         return
     try:
-        mcp.run(transport="stdio")
+        mcp.run(transport="stdio", show_banner=False)
     except HomeKitError as exc:
         logger.error("HomeKit MCP server stopped: %s", exc)
         raise SystemExit(1) from exc
